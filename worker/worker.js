@@ -69,7 +69,7 @@ const sql = `
   return result.results || [];
 }
 
-function buildInstructions() {
+function searchSources() {
   return `
 أنت مساعد داخل تطبيق «فتوى».
 وظيفتك مساعدة المستخدم على فهم المسائل الشرعية بالاعتماد على المصادر التي يرسلها لك النظام.
@@ -92,12 +92,21 @@ function buildInstructions() {
 }
 
 async function askOpenAI(env, question, sources) {
-  const sourceText = sources.length
-    ? sources.map(s =>
-        `SOURCE_ID=${s.id}\nالجهة=${s.authority}\nالعنوان=${s.title}\nرقم الفتوى=${s.fatwa_number || ""}\nالتاريخ=${s.issued_at || ""}\nالرابط=${s.url}\nالملخص=${s.summary || ""}`
-      ).join("\n\n")
-    : "لا توجد مصادر مطابقة في قاعدة المصادر الحالية.";
-
+const sourceText = sources.length
+  ? sources.map(s =>
+      `SOURCE_ID=${s.id}
+الجهة=${s.authority}
+العنوان=${s.title}
+رقم الفتوى=${s.fatwa_number || ""}
+التاريخ=${s.issued_at || ""}
+التصنيف=${s.category || ""}
+الرابط=${s.url}
+السؤال الأصلي=${s.question_text || ""}
+الإجابة=${s.answer_text || ""}
+الملخص=${s.summary || ""}
+المحتوى=${s.content || ""}`
+    ).join("\n\n")
+  : "لا توجد مصادر مطابقة في قاعدة المصادر الحالية.";
   const payload = {
     model: env.OPENAI_MODEL || "gpt-5.6-luna",
     instructions: buildInstructions(),
