@@ -37,12 +37,14 @@ async function searchSources(db, question) {
 
   if (!terms.length) return [];
 
-  const conditions = terms.map(() => "(title LIKE ? OR summary LIKE ? OR content LIKE ?)");
+const conditions = terms.map(() =>
+  "(title LIKE ? OR summary LIKE ? OR content LIKE ? OR question_text LIKE ? OR answer_text LIKE ? OR category LIKE ?)"
+);
   const params = [];
-  for (const term of terms) {
-    const like = `%${term}%`;
-    params.push(like, like, like);
-  }
+for (const term of terms) {
+  const like = `%${term}%`;
+  params.push(like, like, like, like, like, like);
+}
 
   const sql = `
     SELECT id, authority, title, fatwa_number, issued_at, url, summary
