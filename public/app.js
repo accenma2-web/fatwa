@@ -71,7 +71,7 @@ if (custom) {
 // Backend integration prepared for V2.
 // The API key stays on the Worker; never place it in this browser code.
 async function askBackend(question) {
-  const response = await fetch("/api/ask", {
+const response = await fetch("https://fatwa.acc-enma2.workers.dev/api/ask", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({question})
