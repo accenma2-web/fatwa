@@ -7,7 +7,10 @@ const corsHeaders = {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...corsHeaders }
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      ...corsHeaders
+    }
   });
 }
 
@@ -17,18 +20,22 @@ function normalizeText(s) {
 
 function extractOutputText(data) {
   if (typeof data?.output_text === "string") return data.output_text;
+
   const chunks = [];
+
   for (const item of data?.output || []) {
     for (const c of item?.content || []) {
       if (typeof c?.text === "string") chunks.push(c.text);
     }
   }
+
   return chunks.join("\n").trim();
 }
 
 async function searchSources(db, question) {
-  // First MVP: simple keyword/phrase search in the curated sources table.
-  // We will replace/augment this with Arabic full-text/vector retrieval later.
+  // البحث الحالي يعتمد على الكلمات المفتاحية داخل قاعدة المصادر.
+  // سيتم تطويره لاحقًا إلى بحث عربي متقدم / Vector Search.
+
   const terms = normalizeText(question)
     .replace(/[^\u0600-\u06FF\u0750-\u077F0-9a-zA-Z ]/g, " ")
     .split(" ")
@@ -37,50 +44,80 @@ async function searchSources(db, question) {
 
   if (!terms.length) return [];
 
-const conditions = terms.map(() =>
-  "(title LIKE ? OR summary LIKE ? OR content LIKE ? OR question_text LIKE ? OR answer_text LIKE ? OR category LIKE ?)"
-);
-  const params = [];
-for (const term of terms) {
-  const like = `%${term}%`;
-  params.push(like, like, like, like, like, like);
-}
+  const conditions = terms.map(() =>
+    "(title LIKE ? OR summary LIKE ? OR content LIKE ? OR question_text LIKE ? OR answer_text LIKE ? OR category LIKE ?)"
+  );
 
-const sql = `
-  SELECT
-    id,
-    authority,
-    title,
-    fatwa_number,
-    issued_at,
-    url,
-    summary,
-    content,
-    question_text,
-    answer_text,
-    category
-  FROM sources
-  WHERE ${conditions.join(" OR ")}
-  ORDER BY issued_at DESC
-  LIMIT 8
-`;
+  const params = [];
+
+  for (const term of terms) {
+    const like = `%${term}%`;
+    params.push(
+      like,
+      like,
+      like,
+      like,
+      like,
+      like
+    );
+  }
+
+  const sql = `
+    SELECT
+      id,
+      authority,
+      title,
+      fatwa_number,
+      issued_at,
+      url,
+      summary,
+      content,
+      question_text,
+      answer_text,
+      category
+    FROM sources
+    WHERE ${conditions.join(" OR ")}
+    ORDER BY issued_at DESC
+    LIMIT 8
+  `;
 
   const result = await db.prepare(sql).bind(...params).all();
+
   return result.results || [];
 }
 
-function searchSources() {
+function buildInstructions() {
   return `
 أنت مساعد داخل تطبيق «فتوى».
+
 وظيفتك مساعدة المستخدم على فهم المسائل الشرعية بالاعتماد على المصادر التي يرسلها لك النظام.
+
 قواعد إلزامية:
+
 1) لا تخترع فتوى أو مصدرًا أو رقم فتوى أو رابطًا.
-2) لا تنسب قولًا لجهة شرعية إلا إذا كان موجودًا في المصادر المرفقة.
-3) إذا كانت المصادر غير كافية أو السؤال يحتاج تفاصيل مؤثرة، صرّح بذلك واطلب التفاصيل أو أوصِ بالرجوع إلى مختص.
-4) فرّق بوضوح بين نص المصدر وبين الشرح التوضيحي.
-5) لا تدّع أنك مفتٍ بشري؛ أنت أداة مساعدة للمعلومات والبحث.
-6) أجب بالعربية وبأسلوب واضح ومحترم.
-7) أعد JSON صالحًا فقط بالشكل:
+
+2) لا تنسب قولًا لجهة شرعية إلا إذا كان موجودًا بوضوح في المصادر المرفقة.
+
+3) يجب عليك استخدام حقل "الإجابة" و"السؤال الأصلي" عند توفرهما، وليس الاعتماد على عنوان الفتوى أو الملخص فقط.
+
+4) إذا كانت الإجابة الموجودة في المصدر تكفي للإجابة عن سؤال المستخدم، فاعتمد عليها واذكر الحكم المنقول عن المصدر بوضوح.
+
+5) إذا كانت المصادر غير كافية أو السؤال يحتاج تفاصيل مؤثرة، صرّح بذلك ولا تستنتج حكمًا غير موجود في المصادر.
+
+6) فرّق بوضوح بين الحكم المنقول عن المصدر وبين أي شرح توضيحي.
+
+7) لا تدّع أنك مفتٍ بشري؛ أنت أداة مساعدة للمعلومات والبحث.
+
+8) أجب بالعربية وبأسلوب واضح ومحترم.
+
+9) لا تجعل عدم وجود النص الكامل للمصدر على الإنترنت سببًا لرفض الإجابة إذا كان حقل "الإجابة" الموجود في قاعدة البيانات يحتوي على مضمون الفتوى.
+
+10) عند وجود أكثر من مصدر مناسب، يمكنك الاستناد إليها جميعًا، لكن لا تضف مصادر غير موجودة في البيانات.
+
+11) source_ids يجب أن تحتوي فقط على أرقام SOURCE_ID الموجودة فعلًا في المصادر المرفقة.
+
+12) أعد JSON صالحًا فقط بالشكل التالي:
+
 {
   "ruling": "خلاصة الحكم أو حالة عدم كفاية المصادر",
   "explanation": "شرح مختصر",
@@ -92,25 +129,30 @@ function searchSources() {
 }
 
 async function askOpenAI(env, question, sources) {
-const sourceText = sources.length
-  ? sources.map(s =>
-      `SOURCE_ID=${s.id}
+  const sourceText = sources.length
+    ? sources.map(s =>
+        `SOURCE_ID=${s.id}
 الجهة=${s.authority}
 العنوان=${s.title}
 رقم الفتوى=${s.fatwa_number || ""}
 التاريخ=${s.issued_at || ""}
 التصنيف=${s.category || ""}
-الرابط=${s.url}
+الرابط=${s.url || ""}
 السؤال الأصلي=${s.question_text || ""}
 الإجابة=${s.answer_text || ""}
 الملخص=${s.summary || ""}
 المحتوى=${s.content || ""}`
-    ).join("\n\n")
-  : "لا توجد مصادر مطابقة في قاعدة المصادر الحالية.";
+      ).join("\n\n")
+    : "لا توجد مصادر مطابقة في قاعدة المصادر الحالية.";
+
   const payload = {
     model: env.OPENAI_MODEL || "gpt-5.6-luna",
     instructions: buildInstructions(),
-    input: `سؤال المستخدم:\n${question}\n\nالمصادر المسترجعة:\n${sourceText}`,
+    input: `سؤال المستخدم:
+${question}
+
+المصادر المسترجعة:
+${sourceText}`,
     max_output_tokens: 1200
   };
 
@@ -125,7 +167,10 @@ const sourceText = sources.length
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`OpenAI API error ${response.status}: ${detail.slice(0, 500)}`);
+
+    throw new Error(
+      `OpenAI API error ${response.status}: ${detail.slice(0, 500)}`
+    );
   }
 
   const data = await response.json();
@@ -146,19 +191,40 @@ const sourceText = sources.length
 
 export default {
   async fetch(request, env) {
-    if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: corsHeaders
+      });
+    }
 
     const url = new URL(request.url);
 
     if (url.pathname === "/api/health") {
-      return json({ ok: true, app: "فتوى", version: "2.0" });
+      return json({
+        ok: true,
+        app: "فتوى",
+        version: "2.0"
+      });
     }
 
     if (url.pathname === "/api/sources" && request.method === "GET") {
-      const rows = await env.DB.prepare(
-        "SELECT id, authority, title, fatwa_number, issued_at, url, summary FROM sources ORDER BY issued_at DESC LIMIT 50"
-      ).all();
-      return json({ sources: rows.results || [] });
+      const rows = await env.DB.prepare(`
+        SELECT
+          id,
+          authority,
+          title,
+          fatwa_number,
+          issued_at,
+          url,
+          summary
+        FROM sources
+        ORDER BY issued_at DESC
+        LIMIT 50
+      `).all();
+
+      return json({
+        sources: rows.results || []
+      });
     }
 
     if (url.pathname === "/api/ask" && request.method === "POST") {
@@ -170,25 +236,59 @@ export default {
       }
 
       let body;
-      try { body = await request.json(); }
-      catch { return json({ error: "invalid_json" }, 400); }
 
-      const question = normalizeText(body?.question);
-      if (question.length < 5) {
-        return json({ error: "question_too_short", message: "اكتب الموقف بتفصيل أكبر." }, 400);
+      try {
+        body = await request.json();
+      } catch {
+        return json({
+          error: "invalid_json"
+        }, 400);
       }
 
-      const sources = await searchSources(env.DB, question);
-      const answer = await askOpenAI(env, question, sources);
+      const question = normalizeText(body?.question);
 
-      // Store the interaction for later audit/history.
+      if (question.length < 5) {
+        return json({
+          error: "question_too_short",
+          message: "اكتب الموقف بتفصيل أكبر."
+        }, 400);
+      }
+
+      const sources = await searchSources(
+        env.DB,
+        question
+      );
+
+      const answer = await askOpenAI(
+        env,
+        question,
+        sources
+      );
+
+      // حفظ السؤال والإجابة للمراجعة والتاريخ.
       await env.DB.prepare(`
-        INSERT INTO questions (question, answer_json, created_at)
+        INSERT INTO questions (
+          question,
+          answer_json,
+          created_at
+        )
         VALUES (?, ?, datetime('now'))
-      `).bind(question, JSON.stringify(answer)).run();
+      `)
+        .bind(
+          question,
+          JSON.stringify(answer)
+        )
+        .run();
 
-      const selectedIds = new Set(answer.source_ids || []);
-      const citedSources = sources.filter(s => selectedIds.has(s.id));
+      const selectedIds = new Set(
+        Array.isArray(answer.source_ids)
+          ? answer.source_ids
+          : []
+      );
+
+      const citedSources = sources.filter(
+        s => selectedIds.has(s.id)
+      );
 
       return json({
         ok: true,
@@ -198,7 +298,12 @@ export default {
       });
     }
 
-    // Static assets are served by the Assets binding in the next deployment step.
-    return new Response("Not Found", { status: 404, headers: corsHeaders });
+    return new Response(
+      "Not Found",
+      {
+        status: 404,
+        headers: corsHeaders
+      }
+    );
   }
 };
