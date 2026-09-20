@@ -46,13 +46,24 @@ for (const term of terms) {
   params.push(like, like, like, like, like, like);
 }
 
-  const sql = `
-    SELECT id, authority, title, fatwa_number, issued_at, url, summary
-    FROM sources
-    WHERE ${conditions.join(" OR ")}
-    ORDER BY issued_at DESC
-    LIMIT 8
-  `;
+const sql = `
+  SELECT
+    id,
+    authority,
+    title,
+    fatwa_number,
+    issued_at,
+    url,
+    summary,
+    content,
+    question_text,
+    answer_text,
+    category
+  FROM sources
+  WHERE ${conditions.join(" OR ")}
+  ORDER BY issued_at DESC
+  LIMIT 8
+`;
 
   const result = await db.prepare(sql).bind(...params).all();
   return result.results || [];
