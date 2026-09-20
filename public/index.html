@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>فتوى</title>
+  <meta name="description" content="فتوى — احكِ موقفك، واعرف الحكم من مصادر موثوقة.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-overlay"></div>
+
+  <header class="topbar">
+    <button class="icon-btn" id="profileBtn" aria-label="الحساب">◉</button>
+    <div class="brand">
+      <div class="brand-mark">☪</div>
+      <div>
+        <div class="brand-name">فتوى</div>
+        <div class="brand-sub">مصادر موثوقة • إجابات واضحة</div>
+      </div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" aria-label="الإعدادات">⚙</button>
+  </header>
+
+  <main class="app">
+    <section class="hero">
+      <h1>السلام عليكم 👋</h1>
+      <p>ما الموقف الذي تريد معرفة حكمه؟</p>
+    </section>
+
+    <section class="ask-card">
+      <textarea id="question" placeholder="احكِ لي ما حدث معك بالتفصيل... لا تحتاج إلى صياغة السؤال بطريقة معينة، اكتب بطريقتك العادية."></textarea>
+      <div class="ask-tools">
+        <button class="voice-btn" id="voiceBtn">🎙️ تحدث بصوتك</button>
+        <button class="clear-btn" id="clearBtn">×</button>
+      </div>
+      <button class="primary-btn" id="askBtn">اسأل عن الحكم <span>➤</span></button>
+      <div class="hint">سنوضح لك الحكم ونذكر المصادر التي بُنيت عليها الإجابة.</div>
+    </section>
+
+    <section class="topics">
+      <div class="section-title">أو اختر من المواضيع الشائعة:</div>
+      <div class="topic-grid">
+        <button data-topic="العبادات">🕌<span>العبادات</span></button>
+        <button data-topic="المعاملات">💰<span>المعاملات</span></button>
+        <button data-topic="الأسرة">👨‍👩‍👧<span>الأسرة</span></button>
+        <button data-topic="الزكاة">📚<span>الزكاة</span></button>
+      </div>
+    </section>
+
+    <section class="answer" id="answer" hidden>
+      <div class="answer-head">
+        <span class="status-dot"></span>
+        <strong>إجابة فتوى</strong>
+      </div>
+      <div class="answer-box">
+        <h3>الحكم الشرعي</h3>
+        <p id="ruling">سيتم عرض الحكم هنا بعد ربط التطبيق بمحرك الذكاء الاصطناعي والمصادر.</p>
+      </div>
+      <div class="answer-box">
+        <h3>التوضيح</h3>
+        <p id="explanation">في النسخة التجريبية الأولى نجهز الواجهة ومسار الإجابة. في المرحلة التالية سيتم ربطها بقاعدة مصادر موثوقة بحيث لا يعتمد النظام على التخمين.</p>
+      </div>
+      <button class="secondary-btn" id="sourcesBtn">📖 عرض المصادر</button>
+    </section>
+
+    <section class="sources" id="sources" hidden>
+      <div class="section-title">المصادر والمراجع</div>
+      <div class="source-card">
+        <div class="source-icon">📖</div>
+        <div>
+          <strong>مصدر شرعي موثوق</strong>
+          <p>سيظهر هنا عنوان الفتوى ورقمها والرابط الأصلي بعد ربط قاعدة المصادر.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="active">⌂<span>الرئيسية</span></button>
+    <button id="chatsBtn">▢<span>المحادثات</span></button>
+    <button>☆<span>المفضلة</span></button>
+    <button id="moreBtn">☰<span>المزيد</span></button>
+  </nav>
+
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal-card">
+      <button class="close" id="closeSettings">×</button>
+      <h2>الإعدادات</h2>
+      <label>الخلفية</label>
+      <div class="wallpapers">
+        <button data-bg="default">أبيض</button>
+        <button data-bg="mint">نعناعي</button>
+        <button data-bg="nature">طبيعة</button>
+        <button data-bg="night">ليلي</button>
+      </div>
+      <label class="upload-label">
+        اختر صورة من الهاتف
+        <input type="file" id="bgUpload" accept="image/*">
+      </label>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
