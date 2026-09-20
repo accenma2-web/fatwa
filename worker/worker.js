@@ -399,13 +399,209 @@ function buildSearchTerms(question) {
 // ======================================================
 
 async function searchSources(db, question) {
+  const text = normalizeArabic(question);
 
-  const terms =
-    buildSearchTerms(question);
+  // تحديد موضوع السؤال أولًا
+  const topicTerms = [];
+
+  // التقسيط / زيادة السعر / الكاش
+  if (
+    text.includes("تقسيط") ||
+    text.includes("قسط") ||
+    text.includes("اقساط") ||
+    text.includes("كاش") ||
+    text.includes("نقد") ||
+    text.includes("زياده") ||
+    text.includes("اغلى") ||
+    text.includes("اكتر من سعر")
+  ) {
+    topicTerms.push(
+      "التقسيط",
+      "البيع بالتقسيط",
+      "الزيادة في الثمن",
+      "الربح",
+      "الثمن",
+      "البيع"
+    );
+  }
+
+  // البنوك / العوائد
+  if (
+    text.includes("بنك") ||
+    text.includes("بنوك") ||
+    text.includes("فايده") ||
+    text.includes("فوائد") ||
+    text.includes("عائد") ||
+    text.includes("عوائد") ||
+    text.includes("عوايد")
+  ) {
+    topicTerms.push(
+      "فوائد البنوك",
+      "البنوك",
+      "العوائد",
+      "التمويل",
+      "التعامل مع البنوك"
+    );
+  }
+
+  // التطبيقات الإلكترونية
+  if (
+    text.includes("تطبيق") ||
+    text.includes("ابلكيشن") ||
+    text.includes("الكتروني") ||
+    text.includes("اونلاين")
+  ) {
+    topicTerms.push(
+      "تطبيق إلكتروني",
+      "الشراء بالتقسيط عن طريق تطبيق",
+      "المعاملات الحديثة"
+    );
+  }
+
+  // الزكاة
+  if (
+    text.includes("زكاه") ||
+    text.includes("زكاة") ||
+    text.includes("زكوت")
+  ) {
+    topicTerms.push(
+      "الزكاة",
+      "إخراج الزكاة"
+    );
+  }
+
+  // الصيام
+  if (
+    text.includes("صيام") ||
+    text.includes("صايم") ||
+    text.includes("رمضان") ||
+    text.includes("افطر") ||
+    text.includes("افطرت")
+  ) {
+    topicTerms.push(
+      "الصيام",
+      "الإفطار",
+      "نية الإفطار"
+    );
+  }
+
+  // الطلاق
+  if (
+    text.includes("طلاق") ||
+    text.includes("طلق") ||
+    text.includes("رجعي")
+  ) {
+    topicTerms.push(
+      "الطلاق",
+      "الطلاق الرجعي",
+      "أحكام الزوجية"
+    );
+  }
+
+  // الزواج والعدة
+  if (
+    text.includes("زواج") ||
+    text.includes("جواز") ||
+    text.includes("ارمله") ||
+    text.includes("عده")
+  ) {
+    topicTerms.push(
+      "الزواج",
+      "الأرملة",
+      "العدة",
+      "أحكام الزوجية"
+    );
+  }
+
+  // الصلاة
+  if (
+    text.includes("صلاه") ||
+    text.includes("صلاة") ||
+    text.includes("استهزاء") ||
+    text.includes("يسخر")
+  ) {
+    topicTerms.push(
+      "الصلاة",
+      "الاستهزاء بالصلاة",
+      "مكانة الصلاة"
+    );
+  }
+
+  // كلمات السؤال الأصلية
+  const questionTerms = text
+    .replace(
+      /[^\u0600-\u06FF\u0750-\u077F0-9a-zA-Z ]/g,
+      " "
+    )
+    .split(/\s+/)
+    .filter(word => word.length >= 3)
+    .slice(0, 15);
+
+  const terms = [
+    ...new Set([
+      ...topicTerms,
+      ...questionTerms
+    ])
+  ];
 
   if (!terms.length) {
     return [];
   }
+
+  const conditions = terms.map(() =>
+    `(
+      title LIKE ?
+      OR summary LIKE ?
+      OR content LIKE ?
+      OR question_text LIKE ?
+      OR answer_text LIKE ?
+      OR category LIKE ?
+      OR authority LIKE ?
+    )`
+  );
+
+  const params = [];
+
+  for (const term of terms) {
+    const like = `%${term}%`;
+
+    params.push(
+      like,
+      like,
+      like,
+      like,
+      like,
+      like,
+      like
+    );
+  }
+
+  const sql = `
+    SELECT
+      id,
+      authority,
+      title,
+      fatwa_number,
+      issued_at,
+      url,
+      summary,
+      content,
+      question_text,
+      answer_text,
+      category
+    FROM sources
+    WHERE ${conditions.join(" OR ")}
+    ORDER BY issued_at DESC
+    LIMIT 12
+  `;
+
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all();
+
+  return result.results || [];
+}
 
   const conditions =
     terms.map(() =>
