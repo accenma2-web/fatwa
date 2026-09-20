@@ -15,15 +15,13 @@ function json(data, status = 200) {
 }
 
 function normalizeText(s) {
-  return String(s || "")
-    .trim()
-    .replace(/\s+/g, " ");
+  return String(s || "").trim().replace(/\s+/g, " ");
 }
 
 function normalizeArabic(s) {
   return String(s || "")
     .toLowerCase()
-    .replace(/[إأآا]/g, "ا")
+    .replace(/[إأآ]/g, "ا")
     .replace(/ى/g, "ي")
     .replace(/ة/g, "ه")
     .replace(/ؤ/g, "و")
@@ -53,16 +51,16 @@ function extractOutputText(data) {
 
 
 // ======================================================
-// كلمات عامية شائعة وتحويلها إلى مفاهيم بحثية
+// تحويل التعبيرات العامية إلى مفاهيم بحث
 // ======================================================
 
-function expandCommonArabicTerms(question) {
+function expandCommonTerms(question) {
 
   const text = normalizeArabic(question);
 
-  const aliases = [];
-
   const groups = [
+
+    // البنوك والفوائد
     {
       words: [
         "بنك",
@@ -82,16 +80,16 @@ function expandCommonArabicTerms(question) {
         "حساب البنك"
       ],
       terms: [
-        "البنوك",
         "فوائد البنوك",
-        "فوائد",
-        "العوائد",
-        "التعامل مع البنوك",
+        "حكم فوائد البنوك",
         "الانتفاع بالفوائد",
+        "التعامل مع البنوك",
+        "العوائد",
         "تمويل"
       ]
     },
 
+    // التقسيط
     {
       words: [
         "قسط",
@@ -106,14 +104,15 @@ function expandCommonArabicTerms(question) {
       ],
       terms: [
         "البيع بالتقسيط",
+        "حكم البيع بالتقسيط",
         "التقسيط",
-        "البيع",
         "الثمن المؤجل",
         "الزيادة في الثمن",
         "الربح"
       ]
     },
 
+    // الكاش والنقد
     {
       words: [
         "كاش",
@@ -126,11 +125,12 @@ function expandCommonArabicTerms(question) {
       terms: [
         "البيع النقدي",
         "الثمن النقدي",
-        "الثمن",
-        "سعر البيع"
+        "سعر البيع",
+        "البيع بالتقسيط"
       ]
     },
 
+    // الربح والمكسب
     {
       words: [
         "ربح",
@@ -150,6 +150,7 @@ function expandCommonArabicTerms(question) {
       ]
     },
 
+    // التطبيقات الإلكترونية
     {
       words: [
         "تطبيق",
@@ -169,6 +170,7 @@ function expandCommonArabicTerms(question) {
       ]
     },
 
+    // الزكاة
     {
       words: [
         "زكاه",
@@ -184,6 +186,7 @@ function expandCommonArabicTerms(question) {
       ]
     },
 
+    // الصيام
     {
       words: [
         "صيام",
@@ -202,6 +205,7 @@ function expandCommonArabicTerms(question) {
       ]
     },
 
+    // الزواج والعدة
     {
       words: [
         "جواز",
@@ -211,8 +215,8 @@ function expandCommonArabicTerms(question) {
         "زواج",
         "زوج",
         "زوجه",
-        "أرملة",
         "ارمله",
+        "أرملة",
         "عدة",
         "العده"
       ],
@@ -224,6 +228,7 @@ function expandCommonArabicTerms(question) {
       ]
     },
 
+    // الطلاق
     {
       words: [
         "طلاق",
@@ -243,6 +248,7 @@ function expandCommonArabicTerms(question) {
       ]
     },
 
+    // الصلاة
     {
       words: [
         "صلاه",
@@ -261,27 +267,36 @@ function expandCommonArabicTerms(question) {
     }
   ];
 
+  const result = [];
+
   for (const group of groups) {
+
     for (const word of group.words) {
+
       if (text.includes(normalizeArabic(word))) {
-        aliases.push(...group.terms);
+
+        result.push(...group.terms);
+
         break;
       }
     }
   }
 
-  return aliases;
+  return result;
 }
 
 
 // ======================================================
-// استخراج الكلمات الأصلية من سؤال المستخدم
+// استخراج كلمات مهمة من السؤال
 // ======================================================
 
 function extractQuestionTerms(question) {
 
   const cleaned = normalizeArabic(question)
-    .replace(/[^\u0600-\u06FF\u0750-\u077F0-9a-zA-Z ]/g, " ");
+    .replace(
+      /[^\u0600-\u06FF\u0750-\u077F0-9a-zA-Z ]/g,
+      " "
+    );
 
   const stopWords = new Set([
     "انا",
@@ -316,7 +331,6 @@ function extractQuestionTerms(question) {
     "هذا",
     "الذي",
     "التي",
-    "انا",
     "لي",
     "عندي",
     "عندنا",
@@ -329,7 +343,6 @@ function extractQuestionTerms(question) {
     "انه",
     "ان",
     "او",
-    "ولا",
     "ولا",
     "بس",
     "يعني",
@@ -359,156 +372,60 @@ function extractQuestionTerms(question) {
 
 
 // ======================================================
-// فهم السؤال وتحويله إلى كلمات بحث
+// تجهيز كلمات البحث
 // ======================================================
 
-async function understandQuestion(env, question) {
+function buildSearchTerms(question) {
 
-  const localTerms = [
-    ...extractQuestionTerms(question),
-    ...expandCommonArabicTerms(question)
-  ];
+  const originalTerms =
+    extractQuestionTerms(question);
 
-  const uniqueLocalTerms = [
-    ...new Set(localTerms.map(normalizeArabic))
-  ].filter(Boolean);
+  const expandedTerms =
+    expandCommonTerms(question);
 
-
-  // لو لم يوجد مفتاح، نستفيد من البحث المحلي فقط.
-  if (!env.OPENAI_API_KEY) {
-    return uniqueLocalTerms.slice(0, 30);
-  }
-
-
-  const payload = {
-    model: env.OPENAI_MODEL || "gpt-5.6-luna",
-
-    instructions: `
-أنت محرك فهم بحث داخل تطبيق «فتوى».
-
-مهمتك ليست إصدار فتوى.
-
-مهمتك فقط فهم سؤال المستخدم وتحويله إلى كلمات ومفاهيم بحث عربية تساعدنا على العثور على الفتاوى المناسبة داخل قاعدة بيانات محدودة.
-
-السؤال قد يكون:
-- باللهجة المصرية.
-- بالعامية العربية.
-- بالفصحى.
-- مكتوبًا بأخطاء إملائية.
-- سؤالًا مباشرًا.
-- أو حكاية لموقف كامل بدون صياغة سؤال شرعي.
-
-استخرج أهم الموضوعات والمصطلحات التي تصف المسألة.
-
-قواعد مهمة:
-1) لا تجب عن السؤال.
-2) لا تعط حكمًا شرعيًا.
-3) لا تخترع أسماء جهات أو أرقام فتاوى.
-4) لا تضع مصادر.
-5) أخرج كلمات بحث ومفاهيم فقط.
-6) استخدم صيغًا عربية فصحى مناسبة للبحث بالإضافة إلى التعبير العامي إذا كان مهمًا.
-7) إذا ذكر المستخدم موقفًا، استخرج الموضوع الفقهي الأساسي منه.
-8) أعد JSON فقط بهذا الشكل:
-
-{
-  "search_terms": ["مصطلح 1", "مصطلح 2", "مصطلح 3"]
-}
-
-يفضل ألا تتجاوز 20 مصطلحًا.
-`,
-
-    input: `سؤال المستخدم:
-${question}`
-  };
-
-  try {
-
-    const response = await fetch(
-      "https://api.openai.com/v1/responses",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${env.OPENAI_API_KEY}`
-        },
-
-        body: JSON.stringify(payload)
-      }
-    );
-
-
-    if (!response.ok) {
-      return uniqueLocalTerms.slice(0, 30);
-    }
-
-
-    const data = await response.json();
-
-    const text = extractOutputText(data);
-
-
-    try {
-
-      const parsed = JSON.parse(text);
-
-      const aiTerms =
-        Array.isArray(parsed?.search_terms)
-          ? parsed.search_terms
-          : [];
-
-
-      return [
-        ...new Set([
-          ...uniqueLocalTerms,
-          ...aiTerms.map(normalizeArabic)
-        ])
-      ]
-        .filter(term => term.length >= 2)
-        .slice(0, 35);
-
-    } catch {
-
-      return uniqueLocalTerms.slice(0, 30);
-    }
-
-  } catch {
-
-    return uniqueLocalTerms.slice(0, 30);
-  }
+  return [
+    ...new Set([
+      ...originalTerms,
+      ...expandedTerms
+    ].map(normalizeArabic))
+  ]
+    .filter(term => term.length >= 2)
+    .slice(0, 35);
 }
 
 
 // ======================================================
-// البحث في قاعدة المصادر
+// البحث في D1
 // ======================================================
 
-async function searchSources(db, terms) {
+async function searchSources(db, question) {
+
+  const terms =
+    buildSearchTerms(question);
 
   if (!terms.length) {
     return [];
   }
 
-
-  const conditions = terms.map(() =>
-    `(
-      title LIKE ?
-      OR summary LIKE ?
-      OR content LIKE ?
-      OR question_text LIKE ?
-      OR answer_text LIKE ?
-      OR category LIKE ?
-      OR authority LIKE ?
-    )`
-  );
-
+  const conditions =
+    terms.map(() =>
+      `(
+        title LIKE ?
+        OR summary LIKE ?
+        OR content LIKE ?
+        OR question_text LIKE ?
+        OR answer_text LIKE ?
+        OR category LIKE ?
+        OR authority LIKE ?
+      )`
+    );
 
   const params = [];
 
-
   for (const term of terms) {
 
-    const like = `%${term}%`;
+    const like =
+      `%${term}%`;
 
     params.push(
       like,
@@ -520,7 +437,6 @@ async function searchSources(db, terms) {
       like
     );
   }
-
 
   const sql = `
     SELECT
@@ -541,20 +457,18 @@ async function searchSources(db, terms) {
     LIMIT 12
   `;
 
-
   const result =
     await db
       .prepare(sql)
       .bind(...params)
       .all();
 
-
   return result.results || [];
 }
 
 
 // ======================================================
-// تعليمات الإجابة
+// تعليمات الذكاء الاصطناعي
 // ======================================================
 
 function buildInstructions() {
@@ -564,14 +478,15 @@ function buildInstructions() {
 
 وظيفتك مساعدة المستخدم على فهم المسائل الشرعية بالاعتماد على المصادر التي يرسلها لك النظام.
 
-قد يكتب المستخدم سؤاله:
+المستخدم قد يكتب:
 - بالعامية المصرية.
-- بالعربية الفصحى.
+- بالفصحى.
 - بصياغة غير مرتبة.
 - بأخطاء إملائية.
-- أو على شكل قصة أو موقف.
+- أو على شكل قصة وموقف.
+- وقد لا يستخدم المصطلح الشرعي الصحيح.
 
-افهم معنى السؤال، ثم قارن مع المصادر المرفقة.
+افهم المقصود من كلام المستخدم، ثم قارنه بالمصادر المرفقة.
 
 قواعد إلزامية:
 
@@ -579,31 +494,31 @@ function buildInstructions() {
 
 2) لا تنسب قولًا لجهة شرعية إلا إذا كان موجودًا بوضوح في المصادر المرفقة.
 
-3) يجب استخدام حقل "الإجابة" و"السؤال الأصلي" عند توفرهما.
+3) استخدم حقل "الإجابة" و"السؤال الأصلي" عند توفرهما.
 
-4) لا تعتمد على عنوان الفتوى وحده إذا كان حقل الإجابة متوفرًا.
+4) لا تعتمد على عنوان الفتوى وحده إذا كانت الإجابة الأصلية متوفرة.
 
-5) إذا كان المصدر يجيب عن نفس المسألة أو عن مسألة مرتبطة بها بوضوح، يمكن الاستناد إليه.
+5) إذا كان السؤال مكتوبًا بالعامية، افهم معناه وأجب بالعربية الواضحة.
 
-6) إذا كانت هناك فروق في تفاصيل الحالة قد تغير الحكم، وضّح ذلك واطلب التفاصيل عند الحاجة.
+6) إذا كان السؤال عبارة عن قصة، استخرج المسألة الشرعية من تفاصيل القصة وقارنها بالمصادر.
 
-7) إذا كانت المصادر غير كافية للإجابة، قل بوضوح إن المصادر الحالية لا تكفي.
+7) إذا كان المصدر مناسبًا للمسألة، انقل الحكم الموجود فيه بوضوح.
 
-8) لا تستنتج حكمًا شرعيًا جديدًا غير موجود في المصادر.
+8) إذا كانت تفاصيل الحالة قد تؤثر في الحكم، وضح ذلك ولا تتجاوز ما ورد في المصادر.
 
-9) لا تعتبر مجرد تشابه كلمة واحدة كافيًا لاعتماد المصدر؛ افهم موضوع السؤال والسياق.
+9) إذا كانت المصادر الحالية لا تكفي، صرح بذلك ولا تخترع حكمًا.
 
-10) فرّق بوضوح بين الحكم المنقول عن المصدر وبين الشرح التوضيحي.
+10) لا تعتبر مجرد وجود كلمة مشتركة دليلًا على أن المصدر مناسب.
 
-11) لا تدّع أنك مفتٍ بشري؛ أنت أداة مساعدة للمعلومات والبحث.
+11) فرّق بين الحكم المنقول من المصدر وبين الشرح التوضيحي.
 
-12) أجب بالعربية وبأسلوب واضح ومحترم، ويمكنك فهم العامية والرد بلغة عربية واضحة.
+12) لا تدّع أنك مفتٍ بشري.
 
 13) عند وجود أكثر من مصدر مناسب، يمكنك الاستناد إليها جميعًا.
 
-14) source_ids يجب أن تحتوي فقط على أرقام SOURCE_ID الموجودة فعلًا في المصادر المرفقة.
+14) source_ids يجب أن تحتوي فقط على أرقام SOURCE_ID الموجودة فعلًا في المصادر.
 
-15) إذا لم توجد مصادر مناسبة، يجب أن تكون source_ids مصفوفة فارغة.
+15) إذا لم توجد مصادر مناسبة، اجعل source_ids مصفوفة فارغة.
 
 16) أعد JSON صالحًا فقط بالشكل التالي:
 
@@ -619,7 +534,7 @@ function buildInstructions() {
 
 
 // ======================================================
-// توليد الإجابة من المصادر
+// توليد الإجابة
 // ======================================================
 
 async function askOpenAI(env, question, sources) {
@@ -627,7 +542,6 @@ async function askOpenAI(env, question, sources) {
   const sourceText = sources.length
 
     ? sources.map(s =>
-
         `SOURCE_ID=${s.id}
 الجهة=${s.authority}
 العنوان=${s.title}
@@ -639,11 +553,9 @@ async function askOpenAI(env, question, sources) {
 الإجابة=${s.answer_text || ""}
 الملخص=${s.summary || ""}
 المحتوى=${s.content || ""}`
-
       ).join("\n\n")
 
     : "لا توجد مصادر مطابقة في قاعدة المصادر الحالية.";
-
 
   const payload = {
 
@@ -664,7 +576,6 @@ ${sourceText}`,
     max_output_tokens:1200
   };
 
-
   const response =
     await fetch(
       "https://api.openai.com/v1/responses",
@@ -682,7 +593,6 @@ ${sourceText}`,
       }
     );
 
-
   if (!response.ok) {
 
     const detail =
@@ -693,42 +603,34 @@ ${sourceText}`,
     );
   }
 
-
   const data =
     await response.json();
 
-
   const text =
     extractOutputText(data);
-
 
   try {
 
     const parsed =
       JSON.parse(text);
 
-
-    // حماية إضافية:
-    // لا نسمح للـAI بإرجاع SOURCE_ID غير موجود.
-
     const validIds =
       new Set(
-        sources.map(source => source.id)
+        sources.map(
+          source => source.id
+        )
       );
 
-
     parsed.source_ids =
-      Array.isArray(parsed.source_ids)
-
+      Array.isArray(
+        parsed.source_ids
+      )
         ? parsed.source_ids.filter(
             id => validIds.has(id)
           )
-
         : [];
 
-
     return parsed;
-
 
   } catch {
 
@@ -765,7 +667,6 @@ export default {
       });
     }
 
-
     const url =
       new URL(request.url);
 
@@ -774,7 +675,9 @@ export default {
     // Health
     // ==================================================
 
-    if (url.pathname === "/api/health") {
+    if (
+      url.pathname === "/api/health"
+    ) {
 
       return json({
 
@@ -783,6 +686,7 @@ export default {
         app:"فتوى",
 
         version:"2.0"
+
       });
     }
 
@@ -811,11 +715,11 @@ export default {
           LIMIT 50
         `).all();
 
-
       return json({
 
         sources:
           rows.results || []
+
       });
     }
 
@@ -828,7 +732,6 @@ export default {
       url.pathname === "/api/ask" &&
       request.method === "POST"
     ) {
-
 
       if (
         !env.DB ||
@@ -849,7 +752,6 @@ export default {
 
       let body;
 
-
       try {
 
         body =
@@ -869,7 +771,9 @@ export default {
         );
 
 
-      if (question.length < 5) {
+      if (
+        question.length < 5
+      ) {
 
         return json({
 
@@ -883,35 +787,15 @@ export default {
       }
 
 
-      // =================================================
-      // المرحلة الأولى:
-      // فهم صياغة المستخدم
-      // =================================================
-
-      const searchTerms =
-        await understandQuestion(
-          env,
+      // البحث المحسن
+      const sources =
+        await searchSources(
+          env.DB,
           question
         );
 
 
-      // =================================================
-      // المرحلة الثانية:
-      // البحث في المصادر
-      // =================================================
-
-      const sources =
-        await searchSources(
-          env.DB,
-          searchTerms
-        );
-
-
-      // =================================================
-      // المرحلة الثالثة:
-      // الإجابة من المصادر فقط
-      // =================================================
-
+      // الإجابة من المصادر
       const answer =
         await askOpenAI(
           env,
@@ -920,10 +804,7 @@ export default {
         );
 
 
-      // =================================================
       // حفظ السؤال والإجابة
-      // =================================================
-
       await env.DB.prepare(`
         INSERT INTO questions (
           question,
@@ -941,13 +822,10 @@ export default {
 
       const selectedIds =
         new Set(
-
           Array.isArray(
             answer.source_ids
           )
-
             ? answer.source_ids
-
             : []
         );
 
@@ -971,10 +849,8 @@ export default {
           citedSources,
 
         source_candidates:
-          sources,
+          sources
 
-        search_terms:
-          searchTerms
       });
     }
 
