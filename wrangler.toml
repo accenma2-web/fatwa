@@ -1,3 +1,4 @@
+```toml
 name = "fatwa"
 main = "worker/worker.mjs"
 compatibility_date = "2026-09-20"
@@ -12,7 +13,4 @@ database_id = "b5edb91e-73c8-4a85-8ebd-450e9ef0df30"
 
 [vars]
 OPENAI_MODEL = "gpt-5.6-luna"
-
-[[rules]]
-type = "ESModule"
-globs = ["worker/worker.mjs"]
+```
