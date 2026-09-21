@@ -20,6 +20,33 @@ function normalizeText(value) {
     .replace(/\s+/g, " ");
 }
 
+/*
+  V2.1
+  --------------------------------------------------
+  محرك فهم ومطابقة المصادر.
+
+  الفكرة:
+  1) نفهم موضوع السؤال.
+  2) نحدد الكلمات المفتاحية المهمة.
+  3) نبحث عن المصادر المتعلقة بالموضوع.
+  4) نعطي أولوية للسؤال الأصلي والإجابة الأصلية.
+  5) نقلل عدد المصادر المرسلة للـAI.
+  6) لا نغير قاعدة البيانات أو الواجهة.
+*/
+
+function normalizeArabic(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[إأآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/[ًٌٍَُِّْـ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function extractOutputText(data) {
   if (typeof data?.output_text === "string") {
     return data.output_text;
@@ -39,218 +66,331 @@ function extractOutputText(data) {
 }
 
 /*
-========================================================
-البحث الذكي البسيط
-========================================================
-
-الفكرة:
-لا نرسل طلبًا إضافيًا إلى OpenAI لفهم السؤال.
-
-نحوّل بعض التعبيرات العامية إلى كلمات بحث شرعية،
-ثم نبحث في D1.
-
-بعد ذلك فقط نستخدم OpenAI مرة واحدة لصياغة الإجابة
-اعتمادًا على المصادر التي تم العثور عليها.
+  تحديد المجال الرئيسي للسؤال.
 */
+function detectTopics(question) {
+  const text = normalizeArabic(question);
 
-function buildSearchTerms(question) {
-  const text = normalizeText(question).toLowerCase();
+  const topics = [];
 
+  const bankWords = [
+    "بنك",
+    "بنوك",
+    "فوائد",
+    "فائده",
+    "عائد",
+    "عوائد",
+    "عوايد",
+    "شهادات",
+    "حساب توفير",
+    "وديعه",
+    "ودائع"
+  ];
+
+  const installmentWords = [
+    "تقسيط",
+    "قسط",
+    "اقساط",
+    "كاش",
+    "نقد",
+    "نقدا",
+    "زياده",
+    "زيادة",
+    "اغلى",
+    "أغلى",
+    "سعر اعلى",
+    "سعر أعلى",
+    "اجمالي",
+    "إجمالي",
+    "مؤجل",
+    "مؤجل"
+  ];
+
+  const appWords = [
+    "تطبيق",
+    "ابلكيشن",
+    "الكتروني",
+    "إلكتروني",
+    "اونلاين",
+    "أونلاين",
+    "منصه",
+    "منصة"
+  ];
+
+  const zakatWords = [
+    "زكاه",
+    "زكاة",
+    "زكوت",
+    "زكاه المال",
+    "زكاة المال"
+  ];
+
+  const fastingWords = [
+    "صيام",
+    "صايم",
+    "رمضان",
+    "افطار",
+    "إفطار",
+    "افطر",
+    "أفطر",
+    "افطرت",
+    "أفطرت",
+    "نيه الافطار",
+    "نية الإفطار"
+  ];
+
+  const prayerWords = [
+    "صلاه",
+    "صلاة",
+    "استهزاء",
+    "يسخر",
+    "سخريه",
+    "سخرية"
+  ];
+
+  const marriageWords = [
+    "زواج",
+    "جواز",
+    "ارمله",
+    "أرملة",
+    "عده",
+    "عدة",
+    "زوجيه",
+    "الزوجية"
+  ];
+
+  const divorceWords = [
+    "طلاق",
+    "طلق",
+    "رجعي",
+    "رجعه",
+    "رجعة"
+  ];
+
+  if (bankWords.some(word => text.includes(normalizeArabic(word)))) {
+    topics.push("banks");
+  }
+
+  if (installmentWords.some(word => text.includes(normalizeArabic(word)))) {
+    topics.push("installments");
+  }
+
+  if (appWords.some(word => text.includes(normalizeArabic(word)))) {
+    topics.push("electronic");
+  }
+
+  if (zakatWords.some(word => text.includes(normalizeArabic(word)))) {
+    topics.push("zakat");
+  }
+
+  if (fastingWords.some(word => text.includes(normalizeArabic(word)))) {
+    topics.push("fasting");
+  }
+
+  if (prayerWords.some(word => text.includes(normalizeArabic(word)))) {
+    topics.push("prayer");
+  }
+
+  if (marriageWords.some(word => text.includes(normalizeArabic(word)))) {
+    topics.push("marriage");
+  }
+
+  if (divorceWords.some(word => text.includes(normalizeArabic(word)))) {
+    topics.push("divorce");
+  }
+
+  return topics;
+}
+
+/*
+  مصطلحات البحث الأساسية لكل موضوع.
+
+  لا نرسل عشرات الكلمات إلى D1.
+  نستخدم مجموعة صغيرة ذات معنى.
+*/
+function buildTopicTerms(topics) {
   const terms = new Set();
 
-  // الكلمات الموجودة فعليًا في السؤال
+  for (const topic of topics) {
+
+    if (topic === "banks") {
+      terms.add("فوائد البنوك");
+      terms.add("التعامل مع البنوك");
+      terms.add("البنوك");
+      terms.add("التمويل");
+    }
+
+    if (topic === "installments") {
+      terms.add("البيع بالتقسيط");
+      terms.add("مقدار الربح");
+      terms.add("الربح المباح");
+      terms.add("الثمن");
+      terms.add("البيع الفوري");
+      terms.add("البيع");
+    }
+
+    if (topic === "electronic") {
+      terms.add("تطبيق إلكتروني");
+      terms.add("الشراء بالتقسيط عن طريق تطبيق");
+      terms.add("المعاملات الحديثة");
+    }
+
+    if (topic === "zakat") {
+      terms.add("الزكاة");
+      terms.add("إخراج الزكاة");
+    }
+
+    if (topic === "fasting") {
+      terms.add("الصيام");
+      terms.add("الإفطار");
+      terms.add("نية الإفطار");
+    }
+
+    if (topic === "prayer") {
+      terms.add("الصلاة");
+      terms.add("الاستهزاء بالصلاة");
+      terms.add("مكانة الصلاة");
+    }
+
+    if (topic === "marriage") {
+      terms.add("الزواج");
+      terms.add("الأرملة");
+      terms.add("العدة");
+      terms.add("أحكام الزوجية");
+    }
+
+    if (topic === "divorce") {
+      terms.add("الطلاق");
+      terms.add("الطلاق الرجعي");
+      terms.add("أحكام الزوجية");
+    }
+  }
+
+  return Array.from(terms);
+}
+
+/*
+  نضيف بعض الكلمات المهمة من السؤال نفسه،
+  لكن بعدد محدود حتى لا نخلق استعلامًا ضخمًا.
+*/
+function buildQuestionTerms(question) {
+  const text = normalizeText(question);
+
   const words = text
     .replace(/[^\u0600-\u06FF0-9a-zA-Z ]/g, " ")
     .split(/\s+/)
     .filter(word => word.length >= 3);
 
-  for (const word of words.slice(0, 12)) {
-    terms.add(word);
-  }
-
-  // ----------------------------------------------------
-  // البنوك والفوائد
-  // ----------------------------------------------------
-
-  if (
-    text.includes("بنك") ||
-    text.includes("البنك") ||
-    text.includes("بنوك") ||
-    text.includes("البنوك") ||
-    text.includes("فايده") ||
-    text.includes("فائدة") ||
-    text.includes("فوائد") ||
-    text.includes("عائد") ||
-    text.includes("عوائد") ||
-    text.includes("عوايد")
-  ) {
-    terms.add("فوائد البنوك");
-    terms.add("البنوك");
-    terms.add("فوائد");
-    terms.add("العوائد");
-    terms.add("التعامل مع البنوك");
-    terms.add("التمويل");
-  }
-
-  // ----------------------------------------------------
-  // التقسيط
-  // ----------------------------------------------------
-
-  if (
-    text.includes("تقسيط") ||
-    text.includes("بالتقسيط") ||
-    text.includes("قسط") ||
-    text.includes("اقساط") ||
-    text.includes("بالقسط")
-  ) {
-    terms.add("التقسيط");
-    terms.add("البيع بالتقسيط");
-    terms.add("الربح");
-    terms.add("الثمن");
-    terms.add("البيع");
-  }
-
-  // ----------------------------------------------------
-  // زيادة سعر التقسيط عن الكاش
-  // ----------------------------------------------------
-
-  if (
-    text.includes("كاش") ||
-    text.includes("نقد") ||
-    text.includes("نقدا") ||
-    text.includes("زيادة") ||
-    text.includes("زياده") ||
-    text.includes("اغلى") ||
-    text.includes("أغلى") ||
-    text.includes("اكتر من سعر") ||
-    text.includes("أكثر من سعر")
-  ) {
-    terms.add("البيع بالتقسيط");
-    terms.add("مقدار الربح");
-    terms.add("الربح المباح");
-    terms.add("الثمن");
-    terms.add("البيع الفوري");
-  }
-
-  // ----------------------------------------------------
-  // التطبيقات الإلكترونية
-  // ----------------------------------------------------
-
-  if (
-    text.includes("تطبيق") ||
-    text.includes("ابلكيشن") ||
-    text.includes("الكتروني") ||
-    text.includes("إلكتروني") ||
-    text.includes("اونلاين") ||
-    text.includes("أونلاين")
-  ) {
-    terms.add("تطبيق إلكتروني");
-    terms.add("الشراء بالتقسيط عن طريق تطبيق");
-    terms.add("المعاملات الحديثة");
-  }
-
-  // ----------------------------------------------------
-  // الزكاة
-  // ----------------------------------------------------
-
-  if (
-    text.includes("زكاة") ||
-    text.includes("زكاه") ||
-    text.includes("زكوت")
-  ) {
-    terms.add("الزكاة");
-    terms.add("إخراج الزكاة");
-  }
-
-  // ----------------------------------------------------
-  // الصيام
-  // ----------------------------------------------------
-
-  if (
-    text.includes("صيام") ||
-    text.includes("صايم") ||
-    text.includes("رمضان") ||
-    text.includes("افطر") ||
-    text.includes("أفطر") ||
-    text.includes("افطرت") ||
-    text.includes("أفطرت")
-  ) {
-    terms.add("الصيام");
-    terms.add("الإفطار");
-    terms.add("نية الإفطار");
-  }
-
-  // ----------------------------------------------------
-  // الصلاة
-  // ----------------------------------------------------
-
-  if (
-    text.includes("صلاة") ||
-    text.includes("صلاه") ||
-    text.includes("استهزاء") ||
-    text.includes("يسخر")
-  ) {
-    terms.add("الصلاة");
-    terms.add("الاستهزاء بالصلاة");
-    terms.add("مكانة الصلاة");
-  }
-
-  // ----------------------------------------------------
-  // الزواج والعدة
-  // ----------------------------------------------------
-
-  if (
-    text.includes("زواج") ||
-    text.includes("جواز") ||
-    text.includes("ارملة") ||
-    text.includes("أرملة") ||
-    text.includes("عدة") ||
-    text.includes("العدة")
-  ) {
-    terms.add("الزواج");
-    terms.add("الأرملة");
-    terms.add("العدة");
-    terms.add("أحكام الزوجية");
-  }
-
-  // ----------------------------------------------------
-  // الطلاق
-  // ----------------------------------------------------
-
-  if (
-    text.includes("طلاق") ||
-    text.includes("طلق") ||
-    text.includes("رجعي") ||
-    text.includes("رجعة")
-  ) {
-    terms.add("الطلاق");
-    terms.add("الطلاق الرجعي");
-    terms.add("أحكام الزوجية");
-  }
-
-  return Array.from(terms)
-    .filter(term => term.length >= 2)
-    .slice(0, 25);
+  return words.slice(0, 8);
 }
 
-
 /*
-========================================================
-البحث في قاعدة البيانات
-========================================================
+  حساب درجة الصلة بين السؤال والمصدر.
+
+  كلما تطابقت الكلمات مع:
+  - السؤال الأصلي
+  - الإجابة
+  - العنوان
+  - التصنيف
+
+  ترتفع الأولوية.
 */
+function scoreSource(source, question, topics) {
+  const q = normalizeArabic(question);
+
+  const title = normalizeArabic(source.title);
+  const summary = normalizeArabic(source.summary);
+  const sourceQuestion = normalizeArabic(source.question_text);
+  const answer = normalizeArabic(source.answer_text);
+  const category = normalizeArabic(source.category);
+
+  let score = 0;
+
+  const questionWords = q
+    .split(/\s+/)
+    .filter(word => word.length >= 3)
+    .slice(0, 15);
+
+  for (const word of questionWords) {
+
+    if (sourceQuestion.includes(word)) {
+      score += 8;
+    }
+
+    if (title.includes(word)) {
+      score += 6;
+    }
+
+    if (answer.includes(word)) {
+      score += 4;
+    }
+
+    if (summary.includes(word)) {
+      score += 3;
+    }
+
+    if (category.includes(word)) {
+      score += 2;
+    }
+  }
+
+  for (const topic of topics) {
+
+    if (topic === "installments") {
+      if (
+        title.includes("تقسيط") ||
+        sourceQuestion.includes("تقسيط")
+      ) {
+        score += 15;
+      }
+
+      if (
+        title.includes("ربح") ||
+        sourceQuestion.includes("ربح")
+      ) {
+        score += 5;
+      }
+    }
+
+    if (topic === "banks") {
+      if (
+        title.includes("بنوك") ||
+        title.includes("فوائد")
+      ) {
+        score += 15;
+      }
+    }
+
+    if (topic === "electronic") {
+      if (
+        title.includes("تطبيق") ||
+        sourceQuestion.includes("تطبيق")
+      ) {
+        score += 12;
+      }
+    }
+  }
+
+  return score;
+}
 
 async function searchSources(db, question) {
-  const terms = buildSearchTerms(question);
+
+  const topics = detectTopics(question);
+
+  const topicTerms = buildTopicTerms(topics);
+  const questionTerms = buildQuestionTerms(question);
+
+  const terms = Array.from(
+    new Set([
+      ...topicTerms,
+      ...questionTerms
+    ])
+  ).slice(0, 18);
 
   if (!terms.length) {
     return [];
   }
-
-  /*
-  نستخدم عددًا محدودًا من المتغيرات حتى لا نقترب
-  من حدود SQLite / D1.
-  */
 
   const conditions = terms.map(() => `
     (
@@ -265,6 +405,7 @@ async function searchSources(db, question) {
   const params = [];
 
   for (const term of terms) {
+
     const like = `%${term}%`;
 
     params.push(
@@ -292,7 +433,7 @@ async function searchSources(db, question) {
     FROM sources
     WHERE ${conditions.join(" OR ")}
     ORDER BY issued_at DESC
-    LIMIT 12
+    LIMIT 10
   `;
 
   const result = await db
@@ -300,15 +441,23 @@ async function searchSources(db, question) {
     .bind(...params)
     .all();
 
-  return result.results || [];
+  const rows = result.results || [];
+
+  /*
+    ترتيب المصادر حسب الصلة بالسؤال
+  */
+  return rows
+    .map(source => ({
+      ...source,
+      _score: scoreSource(
+        source,
+        question,
+        topics
+      )
+    }))
+    .sort((a, b) => b._score - a._score)
+    .slice(0, 6);
 }
-
-
-/*
-========================================================
-تعليمات OpenAI
-========================================================
-*/
 
 function buildInstructions() {
   return `
@@ -318,46 +467,60 @@ function buildInstructions() {
 بالاعتماد فقط على المصادر التي يرسلها لك النظام.
 
 المستخدم قد يكتب:
-- بالعامية المصرية.
 - بالفصحى.
-- بطريقة غير مرتبة.
+- بالعامية المصرية.
+- بطريقة مختصرة.
 - في صورة قصة.
-- أو باستخدام كلمات مختلفة عن المصطلحات الموجودة في الفتوى.
+- باستخدام كلمات مختلفة عن الكلمات الموجودة في المصدر.
 
-افهم معنى السؤال، ثم طابقه مع المصادر المرفقة.
+يجب أن تفهم المعنى العام للسؤال ثم تقارنه
+بالمصادر المرفقة.
 
 القواعد الإلزامية:
 
 1) لا تخترع فتوى أو مصدرًا أو رقم فتوى أو رابطًا.
 
 2) لا تنسب قولًا إلى جهة شرعية إلا إذا كان موجودًا
-بوضوح في المصادر المرفقة.
+في المصادر المرفقة.
 
-3) عند وجود السؤال الأصلي والإجابة الأصلية للمصدر،
-اعتمد عليهما قبل العنوان أو الملخص.
+3) السؤال الأصلي والإجابة الأصلية للمصدر
+أهم من العنوان وحده.
 
-4) إذا كان المصدر يجيب عن سؤال المستخدم مباشرة،
-اذكر الحكم المنقول عنه بوضوح.
+4) إذا كان المصدر يجيب عن السؤال مباشرة،
+اعتمد عليه بوضوح.
 
-5) إذا كان المستخدم يتحدث بالعامية،
-أجب بالعربية الواضحة مع الحفاظ على معنى كلامه.
+5) إذا كانت صياغة المستخدم عامية،
+حوّل المعنى إلى لغة واضحة في الإجابة.
 
-6) إذا كان السؤال يحتاج تفاصيل مؤثرة في الحكم،
-اذكر أن الحكم قد يتغير بحسب التفاصيل ولا تخترع تفاصيل.
+6) إذا كانت المسألة تعتمد على تفاصيل غير موجودة،
+لا تخترع التفاصيل.
+اذكر أن الحكم قد يختلف بحسب تفاصيل المعاملة.
 
-7) إذا كانت المصادر غير كافية،
-قل بوضوح إن المصادر الحالية لا تكفي للإجابة.
+7) إذا لم تكن المصادر كافية،
+قل صراحة:
+"المصادر الحالية لا تكفي للإجابة."
 
-8) لا تستخدم معلومات خارج المصادر المرفقة باعتبارها فتوى.
+8) لا تستخدم معلومات خارج المصادر باعتبارها فتوى.
 
 9) لا تدّع أنك مفتٍ بشري.
 
-10) فرّق بين الحكم المنقول من المصدر وبين الشرح التوضيحي.
+10) فرّق بين الحكم المنقول من المصدر
+وبين الشرح التوضيحي.
 
-11) source_ids يجب أن تحتوي فقط على أرقام SOURCE_ID
-الموجودة فعلًا في المصادر المرفقة.
+11) source_ids يجب أن تحتوي فقط على أرقام
+SOURCE_ID الموجودة فعلًا في المصادر المرفقة.
 
-12) أعد JSON صالحًا فقط بالشكل التالي:
+12) لا تذكر رقم فتوى إلا إذا كان موجودًا في المصدر.
+
+13) لا تجعل وجود كلمة مشتركة وحدها سببًا
+لإسناد الحكم إلى مصدر.
+يجب أن تكون هناك صلة حقيقية بموضوع السؤال.
+
+14) إذا كانت المصادر تتحدث عن موضوع قريب
+لكنها لا تجيب عن سؤال المستخدم،
+اعتبر المصادر غير كافية.
+
+15) أعد JSON صالحًا فقط بهذا الشكل:
 
 {
   "ruling": "خلاصة الحكم المنقول من المصادر أو بيان عدم كفاية المصادر",
@@ -369,14 +532,8 @@ function buildInstructions() {
 `;
 }
 
-
-/*
-========================================================
-طلب OpenAI
-========================================================
-*/
-
 async function askOpenAI(env, question, sources) {
+
   const sourceText = sources.length
     ? sources.map(source => `
 SOURCE_ID=${source.id}
@@ -389,7 +546,6 @@ SOURCE_ID=${source.id}
 السؤال الأصلي=${source.question_text || ""}
 الإجابة=${source.answer_text || ""}
 الملخص=${source.summary || ""}
-المحتوى=${source.content || ""}
 `).join("\n")
     : "لا توجد مصادر مطابقة في قاعدة المصادر الحالية.";
 
@@ -424,6 +580,7 @@ ${sourceText}
   );
 
   if (!response.ok) {
+
     const detail = await response.text();
 
     console.error(
@@ -442,6 +599,7 @@ ${sourceText}
   const text = extractOutputText(data);
 
   try {
+
     const answer = JSON.parse(text);
 
     const validIds = new Set(
@@ -480,19 +638,12 @@ ${sourceText}
   }
 }
 
-
-/*
-========================================================
-Worker
-========================================================
-*/
-
 export default {
 
   async fetch(request, env) {
 
-    // CORS
     if (request.method === "OPTIONS") {
+
       return new Response(null, {
         headers: corsHeaders
       });
@@ -500,23 +651,22 @@ export default {
 
     const url = new URL(request.url);
 
-
-    // ================================================
-    // Health
-    // ================================================
+    /*
+      Health
+    */
 
     if (url.pathname === "/api/health") {
+
       return json({
         ok: true,
         app: "فتوى",
-        version: "2.0"
+        version: "2.1"
       });
     }
 
-
-    // ================================================
-    // Sources
-    // ================================================
+    /*
+      Sources
+    */
 
     if (
       url.pathname === "/api/sources" &&
@@ -559,10 +709,9 @@ export default {
       }
     }
 
-
-    // ================================================
-    // Ask
-    // ================================================
+    /*
+      Ask
+    */
 
     if (
       url.pathname === "/api/ask" &&
@@ -571,7 +720,6 @@ export default {
 
       try {
 
-        // التأكد من الخدمات
         if (
           !env.DB ||
           !env.OPENAI_API_KEY
@@ -579,17 +727,18 @@ export default {
 
           return json({
             error: "backend_not_configured",
+
             message:
               "قاعدة البيانات أو مفتاح الذكاء الاصطناعي لم يتم ربطهما بعد."
           }, 503);
         }
 
-
-        // قراءة JSON
         let body;
 
         try {
+
           body = await request.json();
+
         } catch {
 
           return json({
@@ -598,11 +747,8 @@ export default {
           }, 400);
         }
 
-
-        // السؤال
         const question =
           normalizeText(body?.question);
-
 
         if (question.length < 5) {
 
@@ -613,16 +759,12 @@ export default {
           }, 400);
         }
 
-
-        // البحث في المصادر
         const sources =
           await searchSources(
             env.DB,
             question
           );
 
-
-        // إجابة OpenAI
         const answer =
           await askOpenAI(
             env,
@@ -630,8 +772,6 @@ export default {
             sources
           );
 
-
-        // حفظ السؤال
         await env.DB
           .prepare(`
             INSERT INTO questions (
@@ -647,8 +787,6 @@ export default {
           )
           .run();
 
-
-        // تحديد المصادر التي اعتمد عليها النموذج
         const selectedIds =
           new Set(
             Array.isArray(answer.source_ids)
@@ -656,46 +794,68 @@ export default {
               : []
           );
 
-
         const citedSources =
           sources.filter(
             source =>
               selectedIds.has(source.id)
           );
 
+        /*
+          لا نرسل _score للواجهة.
+        */
+
+        const cleanSources =
+          citedSources.map(
+            ({
+              _score,
+              content,
+              question_text,
+              answer_text,
+              category,
+              ...source
+            }) => source
+          );
 
         return json({
+
           ok: true,
+
           answer,
-          sources: citedSources,
-          source_candidates: sources
+
+          sources: cleanSources,
+
+          source_candidates:
+            sources.map(
+              ({
+                _score,
+                content,
+                question_text,
+                answer_text,
+                category,
+                ...source
+              }) => source
+            )
         });
 
       } catch (error) {
 
-        /*
-        مهم جدًا:
-        بدل ما الواجهة تعرف فقط أن الاتصال فشل،
-        نسجل الخطأ الحقيقي في Cloudflare Logs.
-        */
-
         console.error(
           "API ASK ERROR:",
-          error?.stack || error?.message || error
+          error?.stack ||
+          error?.message ||
+          error
         );
 
         return json({
+
           error: "server_error",
+
           message:
             "حدث خطأ داخلي أثناء معالجة السؤال."
+
         }, 500);
       }
     }
-
-
-    // ================================================
-    // Not Found
-    // ================================================
 
     return new Response(
       "Not Found",
