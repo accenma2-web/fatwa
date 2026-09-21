@@ -22,17 +22,16 @@ function normalizeText(value) {
 }
 
 /*
+  فتوى
   V2.3.1
   --------------------------------------------------
-  إصلاح D1 too many SQL variables
-
-  1) فهم نية السؤال وليس الكلمات فقط.
-  2) إضافة مرادفات وصياغات عامية.
-  3) عدم استخدام LIMIT قبل حساب الصلة.
-  4) إعطاء أولوية كبيرة للفتوى المتخصصة.
-  5) استخدام content كاحتياط إذا كان answer_text ناقصًا.
-  6) الحفاظ على قاعدة عدم اختراع الأحكام أو المصادر.
-  7) إصلاح عدد SQL variables في بحث D1.
+  - ES Module Worker لدعم D1 binding
+  - إصلاح D1 too many SQL variables
+  - فهم نية السؤال
+  - مرادفات وصياغات عامية
+  - إعطاء أولوية للفتوى المتخصصة
+  - الاعتماد على المصادر المخزنة في D1
+  - عدم اختراع المصادر أو الأحكام
 */
 
 function normalizeArabic(text) {
@@ -74,7 +73,6 @@ function extractOutputText(data) {
 */
 
 const TOPIC_DICTIONARY = {
-
   banks: [
     "بنك",
     "بنوك",
@@ -181,20 +179,6 @@ const TOPIC_DICTIONARY = {
   ]
 };
 
-function hasAny(text, words) {
-  const normalized = normalizeArabic(text);
-
-  return words.some(word =>
-    normalized.includes(normalizeArabic(word))
-  );
-}
-
-/*
-  --------------------------------------------------
-  تحديد الموضوعات العامة
-  --------------------------------------------------
-*/
-
 function detectTopics(question) {
   const text = normalizeArabic(question);
   const topics = [];
@@ -210,7 +194,7 @@ function detectTopics(question) {
 
 /*
   --------------------------------------------------
-  تحديد نية السؤال الدقيقة
+  تحديد نية السؤال
   --------------------------------------------------
 */
 
@@ -223,9 +207,6 @@ function detectIntents(question) {
       text.includes(normalizeArabic(word))
     );
 
-  /*
-    الذهب بالتقسيط
-  */
   if (
     has(["ذهب", "الذهب", "مصوغ", "مصوغات"]) &&
     has(["تقسيط", "قسط", "اقساط", "بالتقسيط"])
@@ -233,9 +214,6 @@ function detectIntents(question) {
     intents.push("gold_installment");
   }
 
-  /*
-    لبس الذهب للرجال
-  */
   if (
     has(["ذهب", "الذهب"]) &&
     has([
@@ -250,9 +228,6 @@ function detectIntents(question) {
     intents.push("gold_men");
   }
 
-  /*
-    حساب زكاة المال
-  */
   if (
     has(["زكاه", "زكاة"]) &&
     has([
@@ -268,9 +243,6 @@ function detectIntents(question) {
     intents.push("zakat_calculation");
   }
 
-  /*
-    الزكاة على أقساط
-  */
   if (
     has(["زكاه", "زكاة"]) &&
     has([
@@ -285,15 +257,8 @@ function detectIntents(question) {
     intents.push("zakat_installment");
   }
 
-  /*
-    الصيام ومنع الطبيب
-  */
   if (
-    has([
-      "صيام",
-      "صايم",
-      "رمضان"
-    ]) &&
+    has(["صيام", "صايم", "رمضان"]) &&
     has([
       "طبيب",
       "دكتور",
@@ -308,16 +273,8 @@ function detectIntents(question) {
     intents.push("fasting_doctor");
   }
 
-  /*
-    إدراك الإمام وهو راكع
-  */
   if (
-    has([
-      "صلاه",
-      "صلاة",
-      "امام",
-      "مسجد"
-    ]) &&
+    has(["صلاه", "صلاة", "امام", "مسجد"]) &&
     has([
       "راكع",
       "ركوع",
@@ -329,53 +286,22 @@ function detectIntents(question) {
     intents.push("prayer_ruku");
   }
 
-  /*
-    زواج الأرملة بعد العدة
-  */
   if (
-    has([
-      "ارمله",
-      "ارمل",
-      "أرملة"
-    ]) &&
-    has([
-      "زواج",
-      "جواز",
-      "عده",
-      "عدة"
-    ])
+    has(["ارمله", "ارمل", "أرملة"]) &&
+    has(["زواج", "جواز", "عده", "عدة"])
   ) {
     intents.push("widow_marriage");
   }
 
-  /*
-    نفقة المتعة والطلاق للضرر
-  */
   if (
-    has([
-      "طلاق",
-      "طلق"
-    ]) &&
-    has([
-      "ضرر",
-      "متعه",
-      "متعة",
-      "نفقه",
-      "نفقة"
-    ])
+    has(["طلاق", "طلق"]) &&
+    has(["ضرر", "متعه", "متعة", "نفقه", "نفقة"])
   ) {
     intents.push("divorce_maintenance");
   }
 
-  /*
-    قصر الصلاة أثناء السفر وتغيير الإقامة
-  */
   if (
-    has([
-      "قصر",
-      "الصلاة",
-      "صلاه"
-    ]) &&
+    has(["قصر", "الصلاة", "صلاه"]) &&
     has([
       "سفر",
       "مسافر",
@@ -402,7 +328,6 @@ function buildTopicTerms(topics) {
   const terms = new Set();
 
   for (const topic of topics) {
-
     if (topic === "banks") {
       terms.add("فوائد البنوك");
       terms.add("التعامل مع البنوك");
@@ -473,7 +398,7 @@ function buildTopicTerms(topics) {
 
 /*
   --------------------------------------------------
-  مصطلحات البحث حسب النية الدقيقة
+  مصطلحات البحث حسب النية
   --------------------------------------------------
 */
 
@@ -481,7 +406,6 @@ function buildIntentTerms(intents) {
   const terms = new Set();
 
   for (const intent of intents) {
-
     if (intent === "gold_installment") {
       terms.add("بيع الذهب بالتقسيط");
       terms.add("الذهب المصوغ بالتقسيط");
@@ -602,12 +526,11 @@ function buildQuestionTerms(question) {
 
 /*
   --------------------------------------------------
-  درجة الصلة
+  حساب الصلة
   --------------------------------------------------
 */
 
 function scoreSource(source, question, topics, intents) {
-
   const q = normalizeArabic(question);
 
   const title = normalizeArabic(source.title);
@@ -624,43 +547,16 @@ function scoreSource(source, question, topics, intents) {
     .filter(word => word.length >= 3)
     .slice(0, 20);
 
-  /*
-    الكلمات الموجودة في السؤال الأصلي
-  */
-
   for (const word of questionWords) {
-
-    if (sourceQuestion.includes(word)) {
-      score += 10;
-    }
-
-    if (title.includes(word)) {
-      score += 8;
-    }
-
-    if (answer.includes(word)) {
-      score += 5;
-    }
-
-    if (summary.includes(word)) {
-      score += 4;
-    }
-
-    if (content.includes(word)) {
-      score += 2;
-    }
-
-    if (category.includes(word)) {
-      score += 2;
-    }
+    if (sourceQuestion.includes(word)) score += 10;
+    if (title.includes(word)) score += 8;
+    if (answer.includes(word)) score += 5;
+    if (summary.includes(word)) score += 4;
+    if (content.includes(word)) score += 2;
+    if (category.includes(word)) score += 2;
   }
 
-  /*
-    تعزيز الموضوعات
-  */
-
   for (const topic of topics) {
-
     if (topic === "installments") {
       if (
         title.includes("تقسيط") ||
@@ -754,16 +650,8 @@ function scoreSource(source, question, topics, intents) {
     }
   }
 
-  /*
-    --------------------------------------------------
-    النية الدقيقة لها الأولوية الأعلى
-    --------------------------------------------------
-  */
-
   for (const intent of intents) {
-
     if (intent === "gold_installment") {
-
       if (
         title.includes("ذهب") &&
         title.includes("تقسيط")
@@ -780,7 +668,6 @@ function scoreSource(source, question, topics, intents) {
     }
 
     if (intent === "gold_men") {
-
       if (
         title.includes("ذهب") &&
         title.includes("رجال")
@@ -797,24 +684,22 @@ function scoreSource(source, question, topics, intents) {
     }
 
     if (intent === "zakat_calculation") {
-
       if (
         title.includes("نصاب") &&
-        title.includes("زكاه")
-      ) {
-        score += 100;
-      }
-
-      if (
-        title.includes("نصاب") &&
-        title.includes("زكاة")
+        (
+          title.includes("زكاه") ||
+          title.includes("زكاة")
+        )
       ) {
         score += 100;
       }
 
       if (
         title.includes("المقدار") &&
-        title.includes("زكاه")
+        (
+          title.includes("زكاه") ||
+          title.includes("زكاة")
+        )
       ) {
         score += 80;
       }
@@ -828,7 +713,6 @@ function scoreSource(source, question, topics, intents) {
     }
 
     if (intent === "zakat_installment") {
-
       if (
         (
           title.includes("زكاه") ||
@@ -842,9 +726,7 @@ function scoreSource(source, question, topics, intents) {
         score += 100;
       }
 
-      if (
-        title.includes("شهري")
-      ) {
+      if (title.includes("شهري")) {
         score += 70;
       }
 
@@ -858,7 +740,6 @@ function scoreSource(source, question, topics, intents) {
     }
 
     if (intent === "fasting_doctor") {
-
       if (
         title.includes("طبيب") &&
         (
@@ -881,28 +762,20 @@ function scoreSource(source, question, topics, intents) {
     }
 
     if (intent === "prayer_ruku") {
-
-      if (
-        title.includes("راكع")
-      ) {
+      if (title.includes("راكع")) {
         score += 120;
       }
 
-      if (
-        title.includes("تكبيره")
-      ) {
+      if (title.includes("تكبيره")) {
         score += 90;
       }
 
-      if (
-        sourceQuestion.includes("راكع")
-      ) {
+      if (sourceQuestion.includes("راكع")) {
         score += 80;
       }
     }
 
     if (intent === "widow_marriage") {
-
       if (
         title.includes("ارمله") &&
         (
@@ -917,5 +790,496 @@ function scoreSource(source, question, topics, intents) {
         sourceQuestion.includes("ارمله") &&
         sourceQuestion.includes("عده")
       ) {
-        score += 9
+        score += 90;
+      }
+    }
+
+    if (intent === "divorce_maintenance") {
+      if (
+        title.includes("نفقة") &&
+        title.includes("متعة")
+      ) {
+        score += 120;
+      }
+
+      if (
+        title.includes("طلاق") &&
+        title.includes("ضرر")
+      ) {
+        score += 100;
+      }
+
+      if (
+        sourceQuestion.includes("ضرر") &&
+        (
+          sourceQuestion.includes("متعة") ||
+          sourceQuestion.includes("نفقة")
+        )
+      ) {
+        score += 80;
+      }
+    }
+
+    if (intent === "travel_qasr") {
+      if (
+        title.includes("قصر") &&
+        title.includes("صلاة")
+      ) {
+        score += 120;
+      }
+
+      if (
+        title.includes("إقامة") ||
+        title.includes("اقامة")
+      ) {
+        score += 60;
+      }
+
+      if (sourceQuestion.includes("سفر")) {
+        score += 50;
+      }
+    }
+  }
+
+  return score;
+}
+
+/*
+  --------------------------------------------------
+  البحث في المصادر
+  --------------------------------------------------
+  مهم:
+  كل term يستخدم SQL variable واحد فقط.
+  هذا يمنع D1 too many SQL variables.
+*/
+
+async function searchSources(db, question) {
+  const topics = detectTopics(question);
+  const intents = detectIntents(question);
+
+  const topicTerms = buildTopicTerms(topics);
+  const intentTerms = buildIntentTerms(intents);
+  const questionTerms = buildQuestionTerms(question);
+
+  const terms = Array.from(
+    new Set([
+      ...intentTerms,
+      ...topicTerms,
+      ...questionTerms
+    ])
+  ).slice(0, 35);
+
+  if (!terms.length) {
+    return [];
+  }
+
+  /*
+    بدلاً من:
+      title LIKE ?
+      OR summary LIKE ?
+      OR question_text LIKE ?
+      ...
+
+    لكل term،
+
+    نجمع الحقول في نص واحد ونستخدم
+    SQL variable واحد لكل term.
+  */
+
+  const conditions = terms.map(() => `
+    (
+      COALESCE(title, '') || ' ' ||
+      COALESCE(summary, '') || ' ' ||
+      COALESCE(question_text, '') || ' ' ||
+      COALESCE(answer_text, '') || ' ' ||
+      COALESCE(content, '') || ' ' ||
+      COALESCE(category, '')
+    ) LIKE ?
+  `);
+
+  const params = terms.map(term => `%${term}%`);
+
+  const sql = `
+    SELECT
+      id,
+      authority,
+      title,
+      fatwa_number,
+      issued_at,
+      url,
+      summary,
+      content,
+      question_text,
+      answer_text,
+      category
+    FROM sources
+    WHERE ${conditions.join(" OR ")}
+    ORDER BY issued_at DESC
+    LIMIT 100
+  `;
+
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all();
+
+  const rows = result?.results || [];
+
+  const scored = rows.map(source => ({
+    ...source,
+    relevance_score: scoreSource(
+      source,
+      question,
+      topics,
+      intents
+    )
+  }));
+
+  scored.sort((a, b) => {
+    if (b.relevance_score !== a.relevance_score) {
+      return b.relevance_score - a.relevance_score;
+    }
+
+    return String(b.issued_at || "")
+      .localeCompare(String(a.issued_at || ""));
+  });
+
+  return scored.slice(0, 8);
+}
+
+/*
+  --------------------------------------------------
+  تعليمات النموذج
+  --------------------------------------------------
+*/
+
+function buildInstructions() {
+  return `
+أنت مساعد الفتاوى في تطبيق «فتوى».
+
+مهمتك تقديم إجابة شرعية مبنية على المصادر الموجودة في قاعدة البيانات فقط.
+
+القواعد:
+
+1. لا تخترع فتوى أو حكمًا شرعيًا.
+2. لا تنسب حكمًا إلى دار الإفتاء إلا إذا كان المصدر موجودًا في المصادر المرسلة لك.
+3. لا تخترع روابط أو أرقام فتاوى.
+4. إذا لم يوجد مصدر مناسب بدرجة كافية، قل بوضوح إن المصادر المتاحة لا تكفي للحكم على الحالة.
+5. فرّق بين النص المنقول من المصدر وبين الشرح المبسط.
+6. لا تجعل وجود مصدر قريب موضوعيًا يعني أنه يجيب عن السؤال نفسه.
+7. عند وجود فتوى متخصصة مباشرة، قدمها على المصادر العامة.
+8. اذكر اسم الجهة ورقم الفتوى والرابط عندما تكون البيانات متاحة.
+9. لا تضف مصادر من معرفتك الخارجية.
+10. لا تدّعي أنك شيخ أو مفتٍ بشري.
+11. في المسائل التي تعتمد على تفاصيل شخصية، وضّح أن الحكم قد يتغير بتغير التفاصيل.
+12. استخدم العربية الواضحة والبسيطة.
+13. لا تذكر معلومات تقنية عن قاعدة البيانات أو الـ API للمستخدم.
+
+صيغة الإجابة المفضلة:
+
+- الحكم المختصر
+- التوضيح
+- المصدر
+
+إذا كان المصدر الرسمي يجيب عن السؤال بصورة مباشرة، اجعل الإجابة واضحة ولا تشتت المستخدم بمصادر غير مرتبطة.
+`;
+}
+
+/*
+  --------------------------------------------------
+  استدعاء OpenAI
+  --------------------------------------------------
+*/
+
+async function askOpenAI(env, question, sources) {
+  const apiKey = env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+
+  const model = env.OPENAI_MODEL || "gpt-5.6-luna";
+
+  const sourceText = sources.length
+    ? sources.map((source, index) => {
+        return `
+المصدر ${index + 1}:
+الجهة: ${source.authority || ""}
+العنوان: ${source.title || ""}
+رقم الفتوى: ${source.fatwa_number || ""}
+التاريخ: ${source.issued_at || ""}
+التصنيف: ${source.category || ""}
+السؤال الأصلي للمصدر: ${source.question_text || ""}
+الإجابة: ${source.answer_text || source.content || source.summary || ""}
+الرابط الرسمي: ${source.url || ""}
+`;
+      }).join("\n")
+    : "لا توجد مصادر مناسبة في قاعدة البيانات.";
+
+  const input = `
+${buildInstructions()}
+
+السؤال:
+${question}
+
+المصادر المتاحة:
+${sourceText}
+`;
+
+  const response = await fetch(
+    "https://api.openai.com/v1/responses",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        input
+      })
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error?.message ||
+      `OpenAI API error: ${response.status}`
+    );
+  }
+
+  const outputText = extractOutputText(data);
+
+  if (!outputText) {
+    throw new Error("OpenAI returned an empty response");
+  }
+
+  return outputText;
+}
+
+/*
+  --------------------------------------------------
+  Worker
+  --------------------------------------------------
+  ES Module format مطلوب مع D1.
+*/
+
+export default {
+  async fetch(request, env) {
+    try {
+      const url = new URL(request.url);
+
+      /*
+        OPTIONS
+      */
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: corsHeaders
+        });
+      }
+
+      /*
+        Health
+      */
+      if (
+        request.method === "GET" &&
+        url.pathname === "/api/health"
+      ) {
+        return json({
+          ok: true,
+          app: "فتوى",
+          version: "2.3.1"
+        });
+      }
+
+      /*
+        Sources
+      */
+      if (
+        request.method === "GET" &&
+        url.pathname === "/api/sources"
+      ) {
+        if (!env.DB) {
+          return json(
+            {
+              ok: false,
+              error: "D1 binding DB is not configured"
+            },
+            500
+          );
+        }
+
+        const result = await env.DB
+          .prepare(`
+            SELECT
+              id,
+              authority,
+              title,
+              fatwa_number,
+              issued_at,
+              url,
+              summary,
+              question_text,
+              answer_text,
+              category
+            FROM sources
+            ORDER BY issued_at DESC, id DESC
+            LIMIT 100
+          `)
+          .all();
+
+        return json({
+          ok: true,
+          sources: result?.results || []
+        });
+      }
+
+      /*
+        Ask
+      */
+      if (
+        request.method === "POST" &&
+        url.pathname === "/api/ask"
+      ) {
+        if (!env.DB) {
+          return json(
+            {
+              ok: false,
+              error: "D1 binding DB is not configured"
+            },
+            500
+          );
+        }
+
+        const body = await request.json().catch(() => null);
+
+        const question = normalizeText(
+          body?.question
+        );
+
+        if (!question) {
+          return json(
+            {
+              ok: false,
+              error: "السؤال مطلوب"
+            },
+            400
+          );
+        }
+
+        if (question.length > 5000) {
+          return json(
+            {
+              ok: false,
+              error: "السؤال طويل جدًا"
+            },
+            400
+          );
+        }
+
+        const sources = await searchSources(
+          env.DB,
+          question
+        );
+
+        const answer = await askOpenAI(
+          env,
+          question,
+          sources
+        );
+
+        /*
+          حفظ السؤال والإجابة في D1
+        */
+        let questionId = null;
+
+        try {
+          const saved = await env.DB
+            .prepare(`
+              INSERT INTO questions
+              (question, answer_json)
+              VALUES (?, ?)
+              RETURNING id
+            `)
+            .bind(
+              question,
+              JSON.stringify({
+                answer,
+                sources: sources.map(source => ({
+                  id: source.id,
+                  authority: source.authority,
+                  title: source.title,
+                  fatwa_number: source.fatwa_number,
+                  issued_at: source.issued_at,
+                  url: source.url,
+                  category: source.category,
+                  relevance_score: source.relevance_score
+                }))
+              })
+            )
+            .first();
+
+          questionId = saved?.id ?? null;
+        } catch (saveError) {
+          /*
+            عدم إسقاط إجابة المستخدم إذا فشل الحفظ.
+          */
+          console.error(
+            "QUESTION SAVE ERROR:",
+            saveError
+          );
+        }
+
+        return json({
+          ok: true,
+          questionId,
+          answer,
+          sources: sources.map(source => ({
+            id: source.id,
+            authority: source.authority,
+            title: source.title,
+            fatwa_number: source.fatwa_number,
+            issued_at: source.issued_at,
+            url: source.url,
+            summary: source.summary,
+            question_text: source.question_text,
+            answer_text: source.answer_text,
+            category: source.category,
+            relevance_score: source.relevance_score
+          }))
+        });
+      }
+
+      /*
+        أي مسار آخر
+      */
+      return json(
+        {
+          ok: false,
+          error: "Not found"
+        },
+        404
+      );
+
+    } catch (error) {
+      console.error(
+        "API ERROR:",
+        error
+      );
+
+      return json(
+        {
+          ok: false,
+          error:
+            error?.message ||
+            "حدث خطأ غير متوقع"
+        },
+        500
+      );
+    }
+  }
+};
 ```
