@@ -873,19 +873,6 @@ async function searchSources(db, question) {
     return [];
   }
 
-  /*
-    بدلاً من:
-      title LIKE ?
-      OR summary LIKE ?
-      OR question_text LIKE ?
-      ...
-
-    لكل term،
-
-    نجمع الحقول في نص واحد ونستخدم
-    SQL variable واحد لكل term.
-  */
-
   const conditions = terms.map(() => `
     (
       COALESCE(title, '') || ' ' ||
@@ -1063,7 +1050,8 @@ ${sourceText}
   --------------------------------------------------
   Worker
   --------------------------------------------------
-  ES Module format مطلوب مع D1.
+  Module Worker format.
+  هذا هو الشكل المطلوب مع D1.
 */
 
 export default {
@@ -1071,9 +1059,6 @@ export default {
     try {
       const url = new URL(request.url);
 
-      /*
-        OPTIONS
-      */
       if (request.method === "OPTIONS") {
         return new Response(null, {
           status: 204,
@@ -1081,9 +1066,6 @@ export default {
         });
       }
 
-      /*
-        Health
-      */
       if (
         request.method === "GET" &&
         url.pathname === "/api/health"
@@ -1095,9 +1077,6 @@ export default {
         });
       }
 
-      /*
-        Sources
-      */
       if (
         request.method === "GET" &&
         url.pathname === "/api/sources"
@@ -1137,9 +1116,6 @@ export default {
         });
       }
 
-      /*
-        Ask
-      */
       if (
         request.method === "POST" &&
         url.pathname === "/api/ask"
@@ -1191,9 +1167,6 @@ export default {
           sources
         );
 
-        /*
-          حفظ السؤال والإجابة في D1
-        */
         let questionId = null;
 
         try {
@@ -1224,9 +1197,6 @@ export default {
 
           questionId = saved?.id ?? null;
         } catch (saveError) {
-          /*
-            عدم إسقاط إجابة المستخدم إذا فشل الحفظ.
-          */
           console.error(
             "QUESTION SAVE ERROR:",
             saveError
@@ -1253,9 +1223,6 @@ export default {
         });
       }
 
-      /*
-        أي مسار آخر
-      */
       return json(
         {
           ok: false,
