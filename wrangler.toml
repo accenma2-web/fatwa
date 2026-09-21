@@ -15,4 +15,4 @@ OPENAI_MODEL = "gpt-5.6-luna"
 
 [[rules]]
 type = "ESModule"
-globs = ["worker/worker.js"]
+globs = ["worker/worker.mjs"]
